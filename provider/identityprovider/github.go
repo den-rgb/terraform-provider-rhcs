@@ -3,7 +3,6 @@ package identityprovider
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
@@ -12,6 +11,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
+	netutils "k8s.io/utils/net"
 
 	"github.com/terraform-redhat/terraform-provider-rhcs/provider/common"
 	"github.com/terraform-redhat/terraform-provider-rhcs/provider/common/attrvalidators"
@@ -88,14 +89,20 @@ func githubHostnameValidator() validator.String {
 		hostname := req.ConfigValue
 		// Validate hostname
 		if !hostname.IsUnknown() && !hostname.IsNull() && len(hostname.ValueString()) > 0 {
-			_, err := url.ParseRequestURI(hostname.ValueString())
-			if err != nil {
+			hostnameStr := hostname.ValueString()
+			if hostnameStr == "github.com" || strings.HasSuffix(hostnameStr, ".github.com") {
 				resp.Diagnostics.AddAttributeError(req.Path, "invalid hostname",
-					fmt.Sprintf("Expected a valid GitHub hostname. Got %v", hostname.ValueString()),
+					fmt.Sprintf("'%s' hostname cannot be equal to [*.]github.com", hostnameStr),
 				)
+				return
+			}
+			if !(len(validation.IsDNS1123Subdomain(hostnameStr)) == 0 || netutils.ParseIPSloppy(hostnameStr) != nil) {
+				resp.Diagnostics.AddAttributeError(req.Path, "invalid hostname",
+					fmt.Sprintf("'%s' hostname must be a valid DNS subdomain or IP address", hostnameStr),
+				)
+				return
 			}
 		}
-
 	})
 }
 

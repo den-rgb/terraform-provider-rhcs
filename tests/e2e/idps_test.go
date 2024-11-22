@@ -566,6 +566,11 @@ var _ = Describe("Identity Providers", ci.Day2, ci.FeatureIDP, func() {
 			}
 		}
 
+		validateIDPArgAgainstNoError := func(svc exec.IDPService, idpArgs *exec.IDPArgs) {
+			_, err := svc.Apply(idpArgs)
+			Expect(err).ToNot(HaveOccurred())
+		}
+
 		It("the mandatory idp's attributes must be set - [id:68939]", ci.Medium, func() {
 			var err error
 			idpServices.htpasswd, err = profileHandler.Services().GetIDPService(constants.IDPHTPassword)
@@ -679,6 +684,36 @@ var _ = Describe("Identity Providers", ci.Day2, ci.FeatureIDP, func() {
 			args = getDefaultGoogleArgs(idpName)
 			args.ClientSecret = helper.EmptyStringPointer
 			validateIDPArgAgainstErrorSubstrings(idpServices.google, args, "Attribute 'client_secret' is mandatory")
+
+			By("Create github idp with invalid hostname")
+			args = getDefaultGitHubArgs(idpName)
+			args.HostedDomain = helper.StringPointer("github.com")
+			validateIDPArgAgainstErrorSubstrings(idpServices.github, args, "hostname cannot be equal to [*.]github.com")
+
+			By("Create github idp with invalid hostname suffix")
+			args = getDefaultGitHubArgs(idpName)
+			args.HostedDomain = helper.StringPointer("example.github.com")
+			validateIDPArgAgainstErrorSubstrings(idpServices.github, args, "hostname cannot be equal to [*.]github.com")
+
+			By("Create github idp with invalid hostname (not a DNS subdomain or IP address)")
+			args = getDefaultGitHubArgs(idpName)
+			args.HostedDomain = helper.StringPointer(" invalid hostname ")
+			validateIDPArgAgainstErrorSubstrings(idpServices.github, args, "hostname must be a valid DNS subdomain or IP address")
+
+			By("Create github idp with hostname myhost.com/aa")
+			args = getDefaultGitHubArgs(idpName)
+			args.HostedDomain = helper.StringPointer("myhost.com/aa")
+			validateIDPArgAgainstNoError(idpServices.github, args)
+
+			By("Create github idp with hostname example.com")
+			args = getDefaultGitHubArgs(idpName)
+			args.HostedDomain = helper.StringPointer("example.com")
+			validateIDPArgAgainstNoError(idpServices.github, args)
+
+			By("Create github idp with empty hostname")
+			args = getDefaultGitHubArgs(idpName)
+			args.HostedDomain = helper.EmptyStringPointer
+			validateIDPArgAgainstErrorSubstrings(idpServices.github, args, "Attribute 'hostname' is mandatory")
 		})
 
 		It("htpasswd with empty user-password list will fail - [id:66409]", ci.Medium, func() {
